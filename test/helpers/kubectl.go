@@ -75,6 +75,7 @@ const (
 
 	LogGathererSelector = "k8s-app=cilium-test-logs"
 	CiliumSelector      = "k8s-app=cilium"
+	DnsCheckSelector    = "k8s-app=cilium-dns-checker"
 )
 
 var (
@@ -1651,7 +1652,7 @@ func (kub *Kubectl) KubernetesDNSCanResolve(namespace, service string) error {
 
 	// https://bugs.launchpad.net/ubuntu/+source/bind9/+bug/854705
 	cmd := fmt.Sprintf("dig +short %s @%s", serviceToResolve, kubeDnsService.Spec.ClusterIP)
-	res := kub.ExecInFirstPod(ctx, LogGathererNamespace, logGathererSelector(false), cmd)
+	res := kub.ExecInFirstPod(ctx, LogGathererNamespace, DnsCheckSelector, cmd)
 	if res.err != nil {
 		return fmt.Errorf("unable to resolve service name %s with DNS server %s by running '%s' Cilium pod: %s",
 			serviceToResolve, kubeDnsService.Spec.ClusterIP, cmd, res.OutputPrettyPrint())
@@ -1670,7 +1671,7 @@ func (kub *Kubectl) KubernetesDNSCanResolve(namespace, service string) error {
 	// IP returned by the dig is the IP of one of the pods.
 	if destinationService.Spec.ClusterIP == v1.ClusterIPNone {
 		cmd := fmt.Sprintf("dig +tcp %s @%s", serviceToResolve, kubeDnsService.Spec.ClusterIP)
-		res = kub.ExecInFirstPod(ctx, LogGathererNamespace, logGathererSelector(false), cmd)
+		res = kub.ExecInFirstPod(ctx, LogGathererNamespace, DnsCheckSelector, cmd)
 		if !res.WasSuccessful() {
 			return fmt.Errorf("unable to resolve service name %s by running '%s': %s",
 				serviceToResolve, cmd, res.OutputPrettyPrint())
@@ -2020,10 +2021,10 @@ func (kub *Kubectl) WaitForKubeDNSEntry(serviceName, serviceNamespace string) er
 		// an IP of the pod itself, not ClusterIPNone, which is what Kubernetes
 		// shows as the IP for the service for headless services.
 		if serviceIP == v1.ClusterIPNone {
-			res := kub.ExecInFirstPod(ctx, LogGathererNamespace, logGathererSelector(false), fmt.Sprintf(digCMD, serviceNameWithNamespace, dnsClusterIP))
+			res := kub.ExecInFirstPod(ctx, LogGathererNamespace, DnsCheckSelector, fmt.Sprintf(digCMD, serviceNameWithNamespace, dnsClusterIP))
 			if res.err != nil {
 				logger.Debugf("failed to run dig in log-gatherer pod")
-				kub.ExecInFirstPod(ctx, LogGathererNamespace, logGathererSelector(false), fmt.Sprintf(digCMDFallback, serviceNameWithNamespace, dnsClusterIP))
+				kub.ExecInFirstPod(ctx, LogGathererNamespace, DnsCheckSelector, fmt.Sprintf(digCMDFallback, serviceNameWithNamespace, dnsClusterIP))
 				return false
 			}
 
@@ -2033,7 +2034,7 @@ func (kub *Kubectl) WaitForKubeDNSEntry(serviceName, serviceNamespace string) er
 		}
 		log.Debugf("service is not headless; checking whether IP retrieved from DNS matches the IP for the service stored in Kubernetes")
 
-		res := kub.ExecInFirstPod(ctx, LogGathererNamespace, logGathererSelector(false), fmt.Sprintf(digCMD, serviceNameWithNamespace, dnsClusterIP))
+		res := kub.ExecInFirstPod(ctx, LogGathererNamespace, DnsCheckSelector, fmt.Sprintf(digCMD, serviceNameWithNamespace, dnsClusterIP))
 		if res.err != nil {
 			logger.Debugf("failed to run dig in log-gatherer pod")
 			return false
@@ -2052,7 +2053,7 @@ func (kub *Kubectl) WaitForKubeDNSEntry(serviceName, serviceNamespace string) er
 		// name to resolve via DNS.
 		if !strings.Contains(serviceIPFromDNS, serviceIP) {
 			logger.Debugf("service IP retrieved from DNS (%s) does not match the IP for the service stored in Kubernetes (%s)", serviceIPFromDNS, serviceIP)
-			kub.ExecInFirstPod(ctx, LogGathererNamespace, logGathererSelector(false), fmt.Sprintf(digCMDFallback, serviceNameWithNamespace, dnsClusterIP))
+			kub.ExecInFirstPod(ctx, LogGathererNamespace, DnsCheckSelector, fmt.Sprintf(digCMDFallback, serviceNameWithNamespace, dnsClusterIP))
 			return false
 		}
 		logger.Debugf("service IP retrieved from DNS (%s) matches the IP for the service stored in Kubernetes (%s)", serviceIPFromDNS, serviceIP)
